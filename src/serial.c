@@ -1437,7 +1437,7 @@ int ser_get_flags(unsigned char *flags)
 			}
 
 			ReleaseMutex(sp.hReadMutex);
-			(void *) modem_status;
+			(void *)(uintptr_t)modem_status;
 
 		#else
 		{

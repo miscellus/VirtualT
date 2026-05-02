@@ -1317,7 +1317,7 @@ void load_remem_ram(void)
 	FILE	*fd;
 	int		size, x;
 	int		empty = 1;
-	int		readlen;
+	size_t		readlen;
 
 	/* Open ReMem file */
 	fd = fopen(mem_setup.remem_file, "rb+");
@@ -1392,7 +1392,7 @@ void load_rampac_ram(void)
 {
 	FILE	*fd;
 	int		size;
-	int		readlen;
+	size_t		readlen;
 
 	/* Open Rampac file */
 	fd = fopen(mem_setup.rampac_file, "rb+");
@@ -1429,7 +1429,7 @@ void load_rex_flash(void)
 {
 	FILE	*fd;
 	int		size;
-	int		readlen;
+	size_t		readlen;
 
 	/* Open ReMem file */
 	fd = fopen(mem_setup.rex_flash_file, "rb+");
@@ -1469,7 +1469,7 @@ void load_rex2_ram(void)
 {
 	FILE	*fd;
 	int		size;
-	int		readlen;
+	size_t		readlen;
 
 	/* Open ReMem file */
 	fd = fopen(mem_setup.rex2_ram_file, "rb+");
@@ -1512,10 +1512,10 @@ load_ram:	This routine loads the contens of the RAM in preparation
 void load_ram(void)
 {
 	char			file[256]; 
-    char            sbank[10];
+  char            sbank[10];
 	FILE			*fd;
 	int				x;
-	int				readlen;
+	size_t				readlen;
 
 	/* Check if ReMem emulation enabled or Base Memory emulation */
 	if (gReMem & !gRex)
@@ -1689,8 +1689,8 @@ void patch_vt_version(char* pMem, int size)
 		{
 			/* Okay, the copyright string has been moved (by the user?)  Find it */
 			address = 0;
-			srchLen = size-strlen(oldString)-1;
-			strLen = strlen(oldString);
+			srchLen = (int)(size-strlen(oldString)-1);
+			strLen = (int)strlen(oldString);
 
 			/* Loop through entire memory range */
 			for (c = 0; c < srchLen; c++)
@@ -1725,7 +1725,7 @@ void load_sys_rom(void)
 {
 	FILE*			fd;
 	//int					fd;
-	int				readlen;
+	size_t				readlen;
 
 	/* Set pointer to ROM Description */
 	if (gModel == MODEL_T200)
@@ -1787,11 +1787,12 @@ load_opt_rom:  This function loads option ROMS as specified by user settings.
 */
 void load_opt_rom(void)
 {
-	int				len, c;
+	size_t				len;
+	int c;
 	FILE			*fd;
 	unsigned short	start_addr;
 	char			buf[65536];
-	int				readlen;
+	size_t				readlen;
 
 	// Clear the option ROM memory
 	memset(gOptROM,0,OPTROMSIZE);

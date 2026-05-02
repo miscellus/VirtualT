@@ -1,5 +1,5 @@
 #ifndef EAFNOSUPPORT
-#define EAFNOSUPPORT            WSAEAFNOSUPPORT
+//#define EAFNOSUPPORT            WSAEAFNOSUPPORT
 #endif
 
 #ifndef IN6ADDRSZ

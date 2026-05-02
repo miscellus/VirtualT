@@ -301,9 +301,24 @@
 								INCPC2; \
 							cycle_delta+=(7); \
 						}
+
+struct do_instruct_state {
+	unsigned int i, j;
+	unsigned int v;
+	int ins;
+};
+
 #endif
 
+
+#define i (state->i)
+#define j (state->j)
+#define v (state->v)
+#define ins (state->ins)
+
+static unsigned int do_instruct(struct do_instruct_state *state)
 {
+	unsigned int cycle_delta = 0;
 //	if(trace)
 //		p=op+sprintf(op,"%04x (%02x) ",PC,INS);
 ins = INS;
@@ -2142,4 +2157,11 @@ ins = INS;
 			}
 		}
 	}
+
+	return cycle_delta;
 }
+
+#undef i
+#undef j
+#undef v
+#undef ins
