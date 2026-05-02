@@ -1005,6 +1005,7 @@ void run_co_file(void)
 	PCH = 0xff & (entry_addr >> 8);
 }
 
+int		sound_enable;				// Set TRUE when sound is enabled
 
 /* This function runs once at startup. */
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
@@ -1023,6 +1024,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 	/* Perform initialization */
 	init_mem();					/* Initialize Memory */
 	init_io();					/* Initialize I/O structures */
+	sound_enable = 1;
 	init_sound();				/* Initialize Sound system */
 	init_display();				/* Initialize the Display */
 	init_cpu();					/* Initialize the CPU */
@@ -1171,29 +1173,14 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
 	/* SDL will clean up the window/renderer for us. */
 
-		/* Save RAM contents after emulation */
+	/* Save RAM contents after emulation */
 	save_ram();
-//	save_model_time();			/* Save the emulated time */
 
 	/* Cleanup */
 	deinit_io();				/* Deinitialize I/O */
 	deinit_sound();				/* Deinitialize sound */
-//	deinit_lpt();				/* Deinitialize the printer */
-//	deinit_throttle_timer();	/* Deinitialize the throttle timer */
-// deinit_display();			/* Deinitialze and free the main window */
 	free_mem();					/* Free memory used by ReMem and/or Rampac */
 }
-
-// --------------------------------------------
-
-/*
-================================================================================
-SetByte:	Updates the LCD with a byte of data as written from the I/O
-			interface from the 8085.
-================================================================================
-*/
-
-int		sound_enable;				// Set TRUE when sound is enabled
 
 void init_display(void) {}
 void deinit_display(void) {}

@@ -257,6 +257,39 @@ init_sound:	This routine initializes the sound output device(s)
 			for tone generations.
 ==================================================================
 */
+// void init_sound(void)
+// {
+//     int     x;
+//     double  w;
+
+//     /* Create sin table for 1Hz */
+//     w = 2.0 * 3.1415926536 / (double) SAMPLING_RATE;
+//     for (x = 0; x < SAMPLING_RATE; x++)
+//     {
+//         gpOneHertz[x] = (unsigned short) (sin(w * (double) x) * 32767.0);
+//     }
+
+//     /* Initialize the emulation cycles count for speaker frequency calcs */
+//     spkr_cycle = cycles;
+//     gExit = 0;
+
+//     gReqMutex = SDL_CreateMutex();
+
+//     /* Prepare SDL Audio Spec for 16-Bit Stereo Audio */
+//     SDL_AudioSpec spec;
+//     SDL_zero(spec);
+//     spec.freq = SAMPLING_RATE;
+//     spec.format = SDL_AUDIO_S16;
+//     spec.channels = NUM_CHANNELS;
+
+//     /* Open stream and resume device */
+//     gAudioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, audio_callback, NULL);
+//     if (gAudioStream)
+//     {
+//         SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(gAudioStream));
+//     }
+// }
+
 void init_sound(void)
 {
     int     x;
@@ -275,6 +308,15 @@ void init_sound(void)
 
     gReqMutex = SDL_CreateMutex();
 
+    if (!SDL_WasInit(SDL_INIT_AUDIO))
+    {
+        if (!SDL_InitSubSystem(SDL_INIT_AUDIO))
+        {
+            SDL_Log("Failed to initialize SDL Audio Subsystem: %s", SDL_GetError());
+            return;
+        }
+    }
+
     /* Prepare SDL Audio Spec for 16-Bit Stereo Audio */
     SDL_AudioSpec spec;
     SDL_zero(spec);
@@ -286,7 +328,11 @@ void init_sound(void)
     gAudioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, audio_callback, NULL);
     if (gAudioStream)
     {
-        SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(gAudioStream));
+        SDL_ResumeAudioStreamDevice(gAudioStream);
+    }
+    else
+    {
+        SDL_Log("Failed to open SDL Audio Device Stream: %s", SDL_GetError());
     }
 }
 
