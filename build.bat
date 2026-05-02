@@ -3,42 +3,36 @@
 mkdir build 2>nul
 
 set SOURCES=^
+  "..\src\main_sdl.c" ^
   "..\src\doins.c" ^
-  "..\src\intelhex.c" ^
   "..\src\io.c" ^
+  "..\src\memory.c" ^
+  "..\src\sound.c" ^
+  "..\src\intelhex.c" ^
   "..\src\kc85rom.c" ^
   "..\src\m100rom.c" ^
   "..\src\m10rom.c" ^
   "..\src\m200rom.c" ^
-  "..\src\memory.c" ^
   "..\src\n8201rom.c" ^
-  "..\src\n8300rom.c" ^
-  "..\src\serial.c" ^
-  "..\src\sound.c" ^
-  "..\src\main_sdl.c"
+  "..\src\n8300rom.c"
 
 set INCLUDE_PATHS=^
 	/I"..\src" ^
 	/I"..\external\SDL3-3.4.4\include"
 
 set CFLAGS=^
-	/D_WIN32 ^
-	/DWIN32 ^
 	/D_CRT_SECURE_NO_WARNINGS ^
 	/nologo ^
 	/W3 ^
 	/Zi ^
 	/Od ^
 	/MDd ^
-	/Fe:"enu.exe"
+	/Fe:"slappy.exe"
 
 set LDFLAGS=^
 	/LIBPATH:"..\external\SDL3-3.4.4\lib\x64" ^
-	wsock32.lib ^
-	comctl32.lib ^
-	winmm.lib ^
 	sdl3.lib ^
-	/SUBSYSTEM:CONSOLE ^
+	/SUBSYSTEM:WINDOWS ^
 	/MACHINE:X64
 
 pushd build
@@ -51,6 +45,6 @@ echo Build failed.
 )
 
 cp ..\external\SDL3-3.4.4\lib\x64\SDL3.dll .
-echo Build succeeded: %cd%\enu.exe
+echo Build succeeded: %cd%\slappy.exe
 popd
 exit /b 0

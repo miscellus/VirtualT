@@ -33,19 +33,11 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
-#include <sys/types.h>
-#include <fcntl.h>
 #include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 
 #ifdef __unix__
 #include <signal.h>
 #include <unistd.h>
-#endif
-
-#ifdef __APPLE__
-#include <semaphore.h>
 #endif
 
 #include "VirtualT.h"
@@ -53,97 +45,69 @@
 #include "cpu.h"
 #include "doins.h"
 #include "display.h"
-#include "genwrap.h"
-#include "filewrap.h"
-#include "roms.h"
-#include "intelhex.h"
 #include "setup.h"
 #include "memory.h"
 #include "m100emu.h"
 #include "sound.h"
-#include "remote.h"
-#include "serial.h"
-#include "lpt.h"
-#include "clock.h"
-#include "fileview.h"
 
-// int				gModel = MODEL_M100;
-int				gModel = MODEL_PC8201;
+// int              gModel = MODEL_M100;
+// int              gModel = MODEL_M10;
+int             gModel = MODEL_PC8201;
+// int              gModel = MODEL_PC8300;
 
-volatile uchar	cpu[14];
-extern uchar	*gMemory[64];
-extern int		gRamBottom;
-extern uchar	gMsplanROM[32768];
-extern uchar	gOptROM[32768];
-extern int		gInMsPlanROM;
+volatile uchar  cpu[14];
+extern uchar    gOptROM[32768];
 
-mem_monitor_cb	gMemMonitor1 = NULL;
-mem_monitor_cb	gMemMonitor2 = NULL;
+char                    op[26];
+int                     fullspeed = 0;
+volatile UINT64         cycles=0;
+volatile int            cycle_delta;
 
-char					op[26];
-int						fullspeed = 0;
-volatile UINT64			cycles=0;
-volatile int			cycle_delta;
-volatile UINT64			instructs = 0;
-volatile UINT64			gThrottleCycles = 0;
-DWORD					gThrottleDelta = 0;
-unsigned int			gThrottlePeriod = 0;
-int						gThrottlePeriodCount = 0;
-int						gThrottleTerminalCount = 0;
-DWORD					gTargetFrequency = 2457600;
-unsigned int			gThrottleId = 0;
-
-double					last_instruct = 0;
-static volatile UINT64	last_isr_cycle = 0;
-int						trace=0;
-int						starttime;
-FILE					*tracefile;
-volatile DWORD			rst7cycles = 9830;
-static time_t			gLptTime;
-static UINT64			one_sec_cycles;
-static time_t			one_sec_time;
-float					cpu_speed;
-float					gCpuSpeedAvg[4];
-int						gCpuSpeedAvgIndex = 0;
-volatile int			gExitApp = 0;
-volatile int			gExitLoop = 0;
-char					gsOptRomFile[256];
-int						gShowVersion = 0;
-int						gMaintCount = 65536;
-int						gOsDelay = 0;
-int						gNoGUI = 0;
-int						gRemoteSwitchModel = -1;
+double                  last_instruct = 0;
+static volatile UINT64  last_isr_cycle = 0;
+int                     trace=0;
+int                     starttime;
+FILE                    *tracefile;
+volatile DWORD          rst7cycles = 9830;
+static time_t           gLptTime;
+static UINT64           one_sec_cycles;
+static time_t           one_sec_time;
+float                   cpu_speed;
+float                   gCpuSpeedAvg[4];
+int                     gCpuSpeedAvgIndex = 0;
+volatile int            gExitApp = 0;
+volatile int            gExitLoop = 0;
+char                    gsOptRomFile[256];
+int                     gShowVersion = 0;
+int                     gMaintCount = 65536;
+int                     gOsDelay = 0;
+int                     gNoGUI = 0;
+int                     gRemoteSwitchModel = -1;
 
 //Added J. VERNET
-char					path[512];
-char					file[512];
+char                    path[512];
+char                    file[512];
 #ifdef __APPLE__
-char					gOsxBundlePath[512];
+char                    gOsxBundlePath[512];
 #endif
 
-extern RomDescription_t		gM100_Desc;
-extern RomDescription_t		gM200_Desc;
-extern RomDescription_t		gN8201_Desc;
-extern RomDescription_t		gM10_Desc;
-extern RomDescription_t		gKC85_Desc;
+extern RomDescription_t     gM100_Desc;
+extern RomDescription_t     gM200_Desc;
+extern RomDescription_t     gN8201_Desc;
+extern RomDescription_t     gM10_Desc;
+extern RomDescription_t     gKC85_Desc;
 
 
-extern uchar				gReMem;
-extern int					cROM;
-extern unsigned char		ioD0;
-RomDescription_t			*gStdRomDesc = NULL;
+extern uchar                gReMem;
+extern int                  cROM;
+extern unsigned char        ioD0;
+RomDescription_t            *gStdRomDesc = NULL;
 
 
 /* Define Debug global variables */
-char					gDebugActive = 0;
-char					gDebugInts = TRUE;
-char					gIntActive = 0;
-unsigned short			gIntSP = 0;
-char					gStopped = 0;
-char					gSingleStep = 0;
-char					gLastWasSingleStep = 0;
-debug_monitor_callback	gpDebugMonitors[3] = { NULL, NULL, NULL };
-void					periph_mon_update_lpt_log(void);
+char                    gDebugInts = TRUE;
+char                    gIntActive = 0;
+unsigned short          gIntSP = 0;
 
 static void *gCoFileContents;
 static size_t gCoFileLength;
@@ -151,14 +115,7 @@ static size_t gCoFileLength;
 
 void show_error(const char *message)
 {
-	fprintf(stderr, "[ERROR] %s\n", message);
-}
-
-void set_target_frequency(int frequency)
-{
-	gTargetFrequency = frequency;
-	gThrottleDelta = gTargetFrequency * gThrottlePeriod / 1000;
-	gThrottleCycles = cycles + gThrottleDelta;
+    fprintf(stderr, "[ERROR] %s\n", message);
 }
 
 /*
@@ -168,16 +125,14 @@ This routine bails from the app in case of a panic.
 */
 void bail(char *msg)
 {
-	int endtime;
+    double endtime=SDL_GetTicksNS()/1000000.0;
+    puts(msg);
+    printf("%-22s A:%02X F:%02X B:%02X C:%02X D:%02X E:%02X H:%02X L:%02X PC:%04X SP:%04X IM:%02X *SP:%04X\n",op,A,F,B,C,D,E,H,L,PC,SP,IM,MEM16(SP));
+    printf("Start: %d  End: %.2f\n",starttime,endtime);
+    printf("Time: %.2f\n",((double)(endtime-starttime))/1000);
+    printf("MHz: %f\n",((UINT64)cycles/(((double)(endtime-starttime))/1000))/1000000);
 
-	endtime=msclock();
-	puts(msg);
-	printf("%-22s A:%02X F:%02X B:%02X C:%02X D:%02X E:%02X H:%02X L:%02X PC:%04X SP:%04X IM:%02X *SP:%04X\n",op,A,F,B,C,D,E,H,L,PC,SP,IM,MEM16(SP));
-	printf("Start: %d  End: %d\n",starttime,endtime);
-	printf("Time: %f\n",((double)(endtime-starttime))/1000);
-	printf("MHz: %f\n",((UINT64)cycles/(((double)(endtime-starttime))/1000))/1000000);
-
-	exit(1);
+    exit(1);
 }
 
 /*
@@ -187,286 +142,286 @@ This routine performs a quick "warm" reset with no re-initialization of mem.
 */
 void zero_cpu_registers(void)
 {
-	/* Clear all CPU registers */
-	for (int i = 0; i < sizeof(cpu); ++i)
-		cpu[i] = 0;
+    /* Clear all CPU registers */
+    for (int i = 0; i < sizeof(cpu); ++i)
+        cpu[i] = 0;
 }
 
 /*
 =============================================================================
-get_model_string:	This function returns the sring name of the specified
-					emulation model.
+get_model_string:   This function returns the sring name of the specified
+                    emulation model.
 =============================================================================
 */
 void get_model_string(char* str, int model)
 {
-	switch (model)
-	{
-	case MODEL_M100:
-		strcpy(str, "m100");
-		break;
-	case MODEL_M102:
-		strcpy(str, "m102");
-		break;
-	case MODEL_T200:
-		strcpy(str, "t200");
-		break;
-	case MODEL_M10:
-		strcpy(str, "m10");
-		break;
-	case MODEL_PC8201:
-		strcpy(str, "pc8201");
-		break;
-	case MODEL_KC85:
-		strcpy(str, "kc85");
-		break;
-	case MODEL_PC8300:
-		strcpy(str, "pc8300");
-		break;
-	}
+    switch (model)
+    {
+    case MODEL_M100:
+        strcpy(str, "m100");
+        break;
+    case MODEL_M102:
+        strcpy(str, "m102");
+        break;
+    case MODEL_T200:
+        strcpy(str, "t200");
+        break;
+    case MODEL_M10:
+        strcpy(str, "m10");
+        break;
+    case MODEL_PC8201:
+        strcpy(str, "pc8201");
+        break;
+    case MODEL_KC85:
+        strcpy(str, "kc85");
+        break;
+    case MODEL_PC8300:
+        strcpy(str, "pc8300");
+        break;
+    }
 }
 
 /*
 =============================================================================
-get_model_from_string:	This function returns the model number given the
-						sring name specified.
+get_model_from_string:  This function returns the model number given the
+                        sring name specified.
 =============================================================================
 */
 int get_model_from_string(char* str)
 {
-	if (strcmp("m100", str) == 0)
-		return MODEL_M100;
-	else if (strcmp("m102", str) == 0)
-		return MODEL_M102;
-	else if (strcmp("t200", str) == 0)
-		return MODEL_T200;
-	else if (strcmp("pc8201", str) == 0)
-		return MODEL_PC8201;
-	else if (strcmp("pc8300", str) == 0)
-		return MODEL_PC8300;
-	else if (strcmp("m10", str) == 0)
-	   return MODEL_M10;
-	else if (strcmp("kc85", str) == 0)
-		return MODEL_KC85;
+    if (strcmp("m100", str) == 0)
+        return MODEL_M100;
+    else if (strcmp("m102", str) == 0)
+        return MODEL_M102;
+    else if (strcmp("t200", str) == 0)
+        return MODEL_T200;
+    else if (strcmp("pc8201", str) == 0)
+        return MODEL_PC8201;
+    else if (strcmp("pc8300", str) == 0)
+        return MODEL_PC8300;
+    else if (strcmp("m10", str) == 0)
+       return MODEL_M10;
+    else if (strcmp("kc85", str) == 0)
+        return MODEL_KC85;
 
-	return -1;
+    return -1;
 }
 
 /*
 =============================================================================
-get_emulation_path:	This function returns the path of the emulation directory
-					based on the supplied model.
+get_emulation_path: This function returns the path of the emulation directory
+                    based on the supplied model.
 =============================================================================
 */
 void get_emulation_path(char* emu, int model)
 {
-	strcpy(emu, path);			/* Copy VirtualT path */
-	switch (model)
-	{
-	case MODEL_M100:
-		strcat(emu, "M100/");
-		break;
-	case MODEL_M102:
-		strcat(emu, "M102/");
-		break;
-	case MODEL_T200:
-		strcat(emu, "T200/");
-		break;
-	case MODEL_M10:
-		strcat(emu, "M10/");
-		break;
-	case MODEL_PC8201:
-		strcat(emu, "PC8201/");
-		break;
-	case MODEL_KC85:
-		strcat(emu, "KC85/");
-		break;
-	case MODEL_PC8300:
-		strcat(emu, "PC8300/");
-		break;
-	}
+    strcpy(emu, path);          /* Copy VirtualT path */
+    switch (model)
+    {
+    case MODEL_M100:
+        strcat(emu, "M100/");
+        break;
+    case MODEL_M102:
+        strcat(emu, "M102/");
+        break;
+    case MODEL_T200:
+        strcat(emu, "T200/");
+        break;
+    case MODEL_M10:
+        strcat(emu, "M10/");
+        break;
+    case MODEL_PC8201:
+        strcat(emu, "PC8201/");
+        break;
+    case MODEL_KC85:
+        strcat(emu, "KC85/");
+        break;
+    case MODEL_PC8300:
+        strcat(emu, "PC8300/");
+        break;
+    }
 }
 
 /*
 =============================================================================
-get_rom_path:	This function returns the path of the ROM file for the
-				model specified.  The path is strcpy(ed) into the string
-				supplied.
+get_rom_path:   This function returns the path of the ROM file for the
+                model specified.  The path is strcpy(ed) into the string
+                supplied.
 =============================================================================
 */
 void get_rom_path(char* file, int model)
 {
-	strcpy(file, path);			/* Copy VirtualT path */
+    strcpy(file, path);         /* Copy VirtualT path */
 
-	switch (model)
-	{
-	case MODEL_M100:
-		strcat(file, "M100/M100rom.bin");
-		break;
-	case MODEL_M102:
-		strcat(file, "M102/M102rom.bin");
-		break;
-	case MODEL_T200:
-		strcat(file, "T200/T200rom.bin");
-		break;
-	case MODEL_M10:
-		strcat(file, "M10/M10rom.bin");
-		break;
-	case MODEL_PC8201:
-		strcat(file, "PC8201/PC8201rom.bin");
-		break;
-	case MODEL_KC85:
-		strcat(file, "KC85/KC85rom.bin");
-		break;
-	case MODEL_PC8300:
-		strcat(file, "PC8300/PC8300rom.bin");
-		break;
-	}
+    switch (model)
+    {
+    case MODEL_M100:
+        strcat(file, "M100/M100rom.bin");
+        break;
+    case MODEL_M102:
+        strcat(file, "M102/M102rom.bin");
+        break;
+    case MODEL_T200:
+        strcat(file, "T200/T200rom.bin");
+        break;
+    case MODEL_M10:
+        strcat(file, "M10/M10rom.bin");
+        break;
+    case MODEL_PC8201:
+        strcat(file, "PC8201/PC8201rom.bin");
+        break;
+    case MODEL_KC85:
+        strcat(file, "KC85/KC85rom.bin");
+        break;
+    case MODEL_PC8300:
+        strcat(file, "PC8300/PC8300rom.bin");
+        break;
+    }
 }
 
 /*
 =============================================================================
-check_model_support:	This function checks for support for the specified
-						Model and returns TRUE if that model is supported.
+check_model_support:    This function checks for support for the specified
+                        Model and returns TRUE if that model is supported.
 
-						Model Support is determined by checking for the
-						appropriate directory structure with the correct ROM
-						file.
+                        Model Support is determined by checking for the
+                        appropriate directory structure with the correct ROM
+                        file.
 =============================================================================
 */
 int check_model_support(int model)
 {
-	char	file[256];
-	FILE*	fd;
+    char    file[256];
+    FILE*   fd;
 
-	/* Get the path for the model supplied */
-	get_rom_path(file, model);
+    /* Get the path for the model supplied */
+    get_rom_path(file, model);
 
-	/* Attempt to open the ROM file */
-	if ((fd = fopen(file, "r")) == NULL)
-		return FALSE;
+    /* Attempt to open the ROM file */
+    if ((fd = fopen(file, "r")) == NULL)
+        return FALSE;
 
-	/* Open successful, close the file and return */
-	fclose(fd);
-	return TRUE;
+    /* Open successful, close the file and return */
+    fclose(fd);
+    return TRUE;
 }
 
 /*
 =============================================================================
-check_installation:	This routine checks that VirtualT is properly installed
-					with model directories and appropriate rom files.
+check_installation: This routine checks that VirtualT is properly installed
+                    with model directories and appropriate rom files.
 
-					If the files are not installed, it attempts to create
-					them using files in the ROMs directory.
+                    If the files are not installed, it attempts to create
+                    them using files in the ROMs directory.
 =============================================================================
 */
 void check_installation(void)
 {
-	int 	model;
-	char	localpath[256];
-	char	roms_path[512];
-	char	errors[256];
+    int     model;
+    char    localpath[256];
+    char    roms_path[512];
+    char    errors[256];
 
-	/* Test if Mac OSX and no path specified */
+    /* Test if Mac OSX and no path specified */
 #ifdef __APPLE__
-	struct stat romStat;
-	if (strlen(path) == 0)
-		return;
+    struct stat romStat;
+    if (strlen(path) == 0)
+        return;
 #endif
 
-	errors[0] = 0;
+    errors[0] = 0;
 
-	/* Check each model */
-	for (model = MODEL_M100; model <= MODEL_PC8300; model++)
-	{
-		/* Check if ROM file exists for this model */
-		if (check_model_support(model))
-			continue;
+    /* Check each model */
+    for (model = MODEL_M100; model <= MODEL_PC8300; model++)
+    {
+        /* Check if ROM file exists for this model */
+        if (check_model_support(model))
+            continue;
 
-		/* ROM file doesn't exist.  Try to open in ROMs dir */
-		get_rom_path(localpath, model);
+        /* ROM file doesn't exist.  Try to open in ROMs dir */
+        get_rom_path(localpath, model);
 #if defined(__APPLE__)
-		sprintf(roms_path, "%sROMs%s", path, strrchr(localpath, '/'));
+        sprintf(roms_path, "%sROMs%s", path, strrchr(localpath, '/'));
 
-		/* Test if the ROM file exists in the working directory */
-		/* stat() is replaced by SDL_GetPathInfo */
-		if (!SDL_GetPathInfo(roms_path, NULL))
-		{
-			/* Test if running from a bundle & get the bundle path */
-			if (strlen(gOsxBundlePath) > 0)
-			{
-				sprintf(roms_path, "%s/Resources%s", gOsxBundlePath, strrchr(localpath, '/'));
-			}
-		}
+        /* Test if the ROM file exists in the working directory */
+        /* stat() is replaced by SDL_GetPathInfo */
+        if (!SDL_GetPathInfo(roms_path, NULL))
+        {
+            /* Test if running from a bundle & get the bundle path */
+            if (strlen(gOsxBundlePath) > 0)
+            {
+                sprintf(roms_path, "%s/Resources%s", gOsxBundlePath, strrchr(localpath, '/'));
+            }
+        }
 #else
-		sprintf(roms_path, "ROMs%s", strrchr(localpath, '/'));
+        sprintf(roms_path, "ROMs%s", strrchr(localpath, '/'));
 #endif
 
-		/* Replaces the old fopen(roms_path, "rb") == NULL check */
-		if (!SDL_GetPathInfo(roms_path, NULL))
-		{
-			/* Error - ROM file not in ROMs dir */
-			if (strlen(errors) != 0)
-				strcat(errors, ", ");
-			get_model_string(localpath, model);
-			strcat(errors, localpath);
-			continue;
-		}
+        /* Replaces the old fopen(roms_path, "rb") == NULL check */
+        if (!SDL_GetPathInfo(roms_path, NULL))
+        {
+            /* Error - ROM file not in ROMs dir */
+            if (strlen(errors) != 0)
+                strcat(errors, ", ");
+            get_model_string(localpath, model);
+            strcat(errors, localpath);
+            continue;
+        }
 
-		/* Create the emulation directory */
-		get_emulation_path(localpath, model);
-		SDL_CreateDirectory(localpath);
+        /* Create the emulation directory */
+        get_emulation_path(localpath, model);
+        SDL_CreateDirectory(localpath);
 
-		/* Copy the ROM file from ROMs dir using SDL3 */
-		get_rom_path(localpath, model);
+        /* Copy the ROM file from ROMs dir using SDL3 */
+        get_rom_path(localpath, model);
 
-		if (!SDL_CopyFile(roms_path, localpath))
-		{
-			if (strlen(errors) != 0)
-				strcat(errors, ", ");
-			get_model_string(localpath, model);
-			strcat(errors, localpath);
-			continue;
-		}
-	}
+        if (!SDL_CopyFile(roms_path, localpath))
+        {
+            if (strlen(errors) != 0)
+                strcat(errors, ", ");
+            get_model_string(localpath, model);
+            strcat(errors, localpath);
+            continue;
+        }
+    }
 
-	if (strlen(errors) > 0)
-	{
-		sprintf(localpath, "No ROM file for %s", errors);
-		show_error(localpath);
-	}
+    if (strlen(errors) > 0)
+    {
+        sprintf(localpath, "No ROM file for %s", errors);
+        show_error(localpath);
+    }
 }
 
 /*
 ======================================================================
-initcpu:	This function initializes the CPU and the system memories
-			including loading the ROM and RAM files.
+initcpu:    This function initializes the CPU and the system memories
+            including loading the ROM and RAM files.
 ======================================================================
 */
 void init_cpu(void)
 {
-	int		i;
+    int     i;
 
-	/* Initialize CPU registers */
-	A = F = B = C = D = E = H = L = 0;
-	SPH = SPL = 0;
-	PCH = PCL = 0;
-	IM=0x08;
-	cpuMISC=0;
+    /* Initialize CPU registers */
+    A = F = B = C = D = E = H = L = 0;
+    SPH = SPL = 0;
+    PCH = PCL = 0;
+    IM=0x08;
+    cpuMISC=0;
 
-	load_sys_rom();
+    load_sys_rom();
 
-	/* Clear the system memory RAM area */
-	for (i = 0; i < RAMSIZE; i++)
-		gBaseMemory[RAMSTART + i] = 0;
+    /* Clear the system memory RAM area */
+    for (i = 0; i < RAMSIZE; i++)
+        gBaseMemory[RAMSTART + i] = 0;
 
-	/* Read RAM from file in emulation directory */
-	//load_ram();
+    /* Read RAM from file in emulation directory */
+    //load_ram();
 
-	/* Load option ROM if any */
-	load_opt_rom();
+    /* Load option ROM if any */
+    load_opt_rom();
 
-	gExitLoop = 1;
+    gExitLoop = 1;
 }
 
 
@@ -477,31 +432,31 @@ This routine peforms a CPU reset and reinitializes memory.
 */
 void resetcpu(void)
 {
-	zero_cpu_registers();
+    zero_cpu_registers();
 
-	/* Set interrupt mask */
-	IM=0x08;
-	cpuMISC=0;
+    /* Set interrupt mask */
+    IM=0x08;
+    cpuMISC=0;
 
-	/* Re-initialize memory */
-	reinit_mem();
+    /* Re-initialize memory */
+    reinit_mem();
 }
 
 void cb_int65(int pinLevel)
 {
-	/* The INT6.5 pin is level sensitive.  Set the interrupt pending bit based on current level */
-	if (pinLevel)
-	{
-		/* Set the INT6.5 pending bit high */
-		IM|=0x20;
-		if(trace && tracefile != NULL)
-			fprintf(tracefile,"RST 6.5 Issued\n");
-	}
-	else
-	{
-		/* Clear the INT6.5 pending bit */
-		IM &= 0xDF;
-	}
+    /* The INT6.5 pin is level sensitive.  Set the interrupt pending bit based on current level */
+    if (pinLevel)
+    {
+        /* Set the INT6.5 pending bit high */
+        IM|=0x20;
+        if(trace && tracefile != NULL)
+            fprintf(tracefile,"RST 6.5 Issued\n");
+    }
+    else
+    {
+        /* Clear the INT6.5 pending bit */
+        IM &= 0xDF;
+    }
 }
 
 /*
@@ -511,193 +466,85 @@ This routine processes CPU interrupts.
 */
 Uint64 check_interrupts(void)
 {
-	static volatile UINT64	last_rst75=0;
+    static volatile UINT64  last_rst75=0;
 
-	Uint64 cycle_delta = 0;
+    Uint64 cycle_delta = 0;
 
-	if (((last_rst75 + rst7cycles) < cycles) && !INTDIS)
-	{
-		IM |= 0x40;
-		if(trace && tracefile != NULL)
-			fprintf(tracefile,"RST 7.5 Issued diff = %d\n", (DWORD) (cycles - last_rst75));
-		last_rst75=cycles;
-	}
+    if (((last_rst75 + rst7cycles) < cycles) && !INTDIS)
+    {
+        IM |= 0x40;
+        if(trace && tracefile != NULL)
+            fprintf(tracefile,"RST 7.5 Issued diff = %d\n", (DWORD) (cycles - last_rst75));
+        last_rst75=cycles;
+    }
 
-	/* TRAP should be first */
+    /* TRAP should be first */
 
-	if(RST75PEND && !INTDIS && !RST75MASK)
-	{
-		if(trace && tracefile != NULL)
-			fprintf(tracefile,"RST 7.5 CALLed\n");
+    if(RST75PEND && !INTDIS && !RST75MASK)
+    {
+        if(trace && tracefile != NULL)
+            fprintf(tracefile,"RST 7.5 CALLed\n");
 
-		if (gDebugInts)
-			gIntActive = TRUE;
-		gIntSP = SP;
-		DECSP2;
-		if (gReMem)
-		{
-			MEMSET(SP, PCL);
-			MEMSET(SP+1, PCH);
-		}
-		else
-		{
-			gBaseMemory[SP] = PCL;
-			gBaseMemory[SP+1] = PCH;
-		}
-		/* MEM16(SP)=PC; */
-		PCL=60;
-		PCH=0;
-		/* PC=60; */
-		cycle_delta += 10;	/* This may not be correct */
-		IM=IM&0xBF;
-		last_isr_cycle = cycles;
+        if (gDebugInts)
+            gIntActive = TRUE;
+        gIntSP = SP;
+        DECSP2;
+        if (gReMem)
+        {
+            MEMSET(SP, PCL);
+            MEMSET(SP+1, PCH);
+        }
+        else
+        {
+            gBaseMemory[SP] = PCL;
+            gBaseMemory[SP+1] = PCH;
+        }
+        /* MEM16(SP)=PC; */
+        PCL=60;
+        PCH=0;
+        /* PC=60; */
+        cycle_delta += 10;  /* This may not be correct */
+        IM=IM&0xBF;
+        last_isr_cycle = cycles;
 
-		if (gDelayUpdateKeys == 1)
-			update_keys();
-	}
-	else if(RST65PEND && !INTDIS && !RST65MASK)
-	{
-		if(trace && tracefile != NULL)
-			fprintf(tracefile,"RST 6.5 CALLed\n");
+        if (gDelayUpdateKeys == 1)
+            update_keys();
+    }
+    else if(RST65PEND && !INTDIS && !RST65MASK)
+    {
+        if(trace && tracefile != NULL)
+            fprintf(tracefile,"RST 6.5 CALLed\n");
 
-		if (gDebugInts)
-			gIntActive = TRUE;
-		gIntSP = SP;
-		DECSP2;
-		if (gReMem)
-		{
-			MEMSET(SP, PCL);
-			MEMSET(SP+1, PCH);
-		}
-		else
-		{
-			gBaseMemory[SP] = PCL;
-			gBaseMemory[SP+1] = PCH;
-		}
+        if (gDebugInts)
+            gIntActive = TRUE;
+        gIntSP = SP;
+        DECSP2;
+        if (gReMem)
+        {
+            MEMSET(SP, PCL);
+            MEMSET(SP+1, PCH);
+        }
+        else
+        {
+            gBaseMemory[SP] = PCL;
+            gBaseMemory[SP+1] = PCH;
+        }
 
-		/* MEM16(SP)=PC; */
-		PCL=52;
-		PCH=0;
-		/* PC=52; */
-		cycle_delta += 10;	/* This may not be correct */
-//		IM=IM&0xDF;
-		last_isr_cycle = cycles;
-	}
-	return cycle_delta;
+        /* MEM16(SP)=PC; */
+        PCL=52;
+        PCH=0;
+        /* PC=52; */
+        cycle_delta += 10;  /* This may not be correct */
+//      IM=IM&0xDF;
+        last_isr_cycle = cycles;
+    }
+    return cycle_delta;
 }
 
 void remote_switch_model(int model)
 {
-	gRemoteSwitchModel = model;
+    gRemoteSwitchModel = model;
 }
-
-/*
-========================================================================
-This routine performs periodic maintenance operations, such as checking
-interrupts and processing FLTK window events.
-========================================================================
-*/
-void maint(void)
-{
-	static int		rst7UpdateCnt = 0;
-	DWORD			new_rst7cycles;
-	static int		lpt_update = 0;
-	int				count;
-	static int		secsPeriod = 0;
-	static	int		secsCycles = 0;
-	DWORD			deltaCycles, oneSecCycleEstimate;
-	static UINT64	lastDeltaCycles = 0;
-
-	/* Adjust the background tick cycle estimate 25 times a second */
-	if (gThrottlePeriodCount > 0)
-	{
-		count = gThrottlePeriodCount;
-		gThrottlePeriodCount = 0;
-
-		// Calculate the delta in cycles since the last time we checked
-		deltaCycles = (DWORD) (cycles - lastDeltaCycles);
-		lastDeltaCycles = cycles;
-		oneSecCycleEstimate = (DWORD) ((UINT64) deltaCycles * gThrottleTerminalCount / count);
-		secsPeriod += count;
-		secsCycles += deltaCycles;
-		if (secsPeriod >= gThrottleTerminalCount)
-		{
-			one_sec_cycles = cycles;
-
-			/* Every second we want to update the CPU frequencey and do some maintenance */
-			gCpuSpeedAvg[gCpuSpeedAvgIndex++] = (float) secsCycles / (float) 1000000.0;
-			gCpuSpeedAvgIndex %= 4;
-			cpu_speed = (gCpuSpeedAvg[0] + gCpuSpeedAvg[1] + gCpuSpeedAvg[2] + gCpuSpeedAvg[3]) / (float) 4.0;
-//			display_cpu_speed();
-
-			/* Check for errors on the LPT port and update the Peripherial Display if visible */
-//			lpt_check_errors();
-//			periph_mon_update_lpt_log();
-//			time(&one_sec_time);
-
-			/* Clear variables so we only enter here once a second */
-			secsCycles = 0;
-			secsPeriod = 0;
-		}
-
-#ifdef WIN32
-		new_rst7cycles = (DWORD) (0.0039998 * oneSecCycleEstimate);	  /* 0.0039998 = 9830 / 2457600 */
-#else
-		if (fullspeed == 3)
-			new_rst7cycles = (DWORD) (oneSecCycleEstimate / 256);	  /* Fullspeed sleeps twice as long */
-		else
-			new_rst7cycles = (DWORD) (oneSecCycleEstimate / 128);
-#endif
-
-		// Check if the rst7cycles needs to be updated.  We only update this every 3rd time through
-		// The rst7cycles value is what controls the keyboard-timer interrupt rate and it
-		// changes based on host CPU speed to try to match the M100 scan rate
-		if ((new_rst7cycles > (rst7cycles * 0.8)) || (rst7UpdateCnt == 2))
-		{
-			rst7cycles = new_rst7cycles;
-			if (rst7cycles < 9830)
-				rst7cycles = 9830;
-			rst7UpdateCnt = 0;
-
-			// Check if we need to update the Memory Editor monitor
-			if (gMemMonitor1 != NULL)
-				gMemMonitor1();
-			if (gMemMonitor2 != NULL)
-				gMemMonitor2();
-		}
-		else
-			rst7UpdateCnt++;
-
-//		// Check if we need to do lpt animation
-//		if (++lpt_update >= 7)
-//		{
-//			lpt_perodic_update();
-//			lpt_update = 0;
-//		}
-
-		// Test if socket interface simulating a key press
-//		handle_simkey();
-//		process_windows_event();
-	}
-
-	// Test if socket interface requested model switch
-//	if (gRemoteSwitchModel != -1)
-//	{
-//		switch_model(gRemoteSwitchModel);
-//		gRemoteSwitchModel = -1;
-//	}
-
-//	// Handle LPT Timeout Activity
-//	if (one_sec_time != gLptTime)
-//	{
-//		gLptTime = one_sec_time;
-//		handle_lpt_timeout((DWORD) one_sec_time);
-//	}
-
-	if (gInMsPlanROM)
-		gInMsPlanROM--;
-}
-
 
 /* Instruction emulation contained in header file */
 #undef NO_REMEM
@@ -715,122 +562,121 @@ void emulate_n_cycles(Sint64 n_cycles)
 {
     static Sint64 cycle_accumulator = 0;
 
-	if (n_cycles <= 0) return;
+    if (n_cycles <= 0) return;
 
-	n_cycles *= 4;
+    n_cycles *= 4;
 
-	Sint64 cycle_delta = 0;
+    Sint64 cycle_delta = 0;
 
-	while (cycle_delta < n_cycles)
-	{
-		cycle_delta += do_instruct(&do_instruct_state);
+    while (cycle_delta < n_cycles)
+    {
+        cycle_delta += do_instruct(&do_instruct_state);
 
-		// Check if next inst is SIM
-		if ((get_memory8(PC) == 0xF3) || ((IM & 0x2A) == 0x20) || ((IM & 0x4C) == 0x40))
-		{
-			cycle_delta += check_interrupts();
-		}
+        // Check if next inst is SIM
+        if ((get_memory8(PC) == 0xF3) || ((IM & 0x2A) == 0x20) || ((IM & 0x4C) == 0x40))
+        {
+            cycle_delta += check_interrupts();
+        }
 
-		// Check for return from interrupt
-		if (gIntActive)
-		{
-			if (SP == gIntSP)
-				gIntActive = FALSE;
-		}
+        // Check for return from interrupt
+        if (gIntActive)
+        {
+            if (SP == gIntSP)
+                gIntActive = FALSE;
+        }
 
-		for (
-			cycle_accumulator += cycle_delta;
-			cycle_accumulator > CYCLES_PER_RST_7_5;
-			cycle_accumulator -= CYCLES_PER_RST_7_5)
-		{
-			maint();
-			cycle_delta += check_interrupts();
-		}
-	}
+        for (
+            cycle_accumulator += cycle_delta;
+            cycle_accumulator > CYCLES_PER_RST_7_5;
+            cycle_accumulator -= CYCLES_PER_RST_7_5)
+        {
+            cycle_delta += check_interrupts();
+        }
+    }
 
-	cycles += cycle_delta;
+    cycles += cycle_delta;
 }
 
 /*
 ========================================================================
-handle_sig:	This routine handles unix signals and kills the app if there
-			is a panic.
+handle_sig: This routine handles unix signals and kills the app if there
+            is a panic.
 ========================================================================
 */
 #ifdef __unix__
 void handle_sig(int sig)
 {
-	bail("Kill by signal");
+    bail("Kill by signal");
 }
 #endif
 
 /*
 ========================================================================
-process_args:	This routine processes the command-line arguments.
+process_args:   This routine processes the command-line arguments.
 ========================================================================
 */
 int process_args(int argc, char **argv)
 {
-	int i;
+    int i;
 
-	for (i = 0; i < argc; i++)
-	{
-		// Seach for trace flag
-		if (!strcmp(argv[i], "-t"))
-		{
-			trace = 1;				/* Turn on trace mode */
-			tracefile = fopen("trace.txt", "w+");
-		}
+    for (i = 0; i < argc; i++)
+    {
+        // Seach for trace flag
+        if (!strcmp(argv[i], "-t"))
+        {
+            trace = 1;              /* Turn on trace mode */
+            tracefile = fopen("trace.txt", "w+");
+        }
 
-		// Search for No-GUI flag
-		if (!strcmp(argv[i], "-nogui"))
-			gNoGUI = 1;
+        // Search for No-GUI flag
+        if (!strcmp(argv[i], "-nogui"))
+            gNoGUI = 1;
 
-		// Search for Socket Port flag
-		if (!strcmp(argv[i], "-run-co-file"))
-		{
-			// Path to CO-file is next argument
-			if (i + 1 >= argc)
-			{
-				printf("%s: -run-co-file path to CO-file not specified\n", argv[0]);
-				return 1;
-			}
-			else
-			{
-				gCoFileContents = SDL_LoadFile(argv[i+1], &gCoFileLength);
-				i++;
-			}
-		}
+        // Search for Socket Port flag
+        if (!strcmp(argv[i], "-run-co-file"))
+        {
+            // Path to CO-file is next argument
+            if (i + 1 >= argc)
+            {
+                printf("%s: -run-co-file path to CO-file not specified\n", argv[0]);
+                return 1;
+            }
+            else
+            {
+                gCoFileContents = SDL_LoadFile(argv[i+1], &gCoFileLength);
+                i++;
+            }
+        }
 
-//		if (!strcmp(argv[i], "-t"))
-//			set_remote_cmdline_telnet(TRUE);
+//      if (!strcmp(argv[i], "-t"))
+//          set_remote_cmdline_telnet(TRUE);
 
-//		// Search for Socket Port flag
-//		if (!strncmp(argv[i], "-p", 2))
-//		{
-//			// Check if port number is part of flag
-//			if (strlen(argv[i]) != 2)
-//			{
-//				set_remote_cmdline_port(atoi(&argv[i][2]));
-//			}
-//			else
-//			{
-//				// Socket number is next argument
-//				if (i + 1 >= argc)
-//				{
-//					printf("%s: -p port not specified\n", argv[0]);
-//					return 1;
-//				}
-//				else
-//				{
-//					set_remote_cmdline_port(atoi(argv[i+1]));
-//					i++;
-//				}
-//			}
-//		}
-	}
+//      // Search for Socket Port flag
+//      if (!strncmp(argv[i], "-p", 2))
+//      {
+//          // Check if port number is part of flag
+//          if (strlen(argv[i]) != 2)
+//          {
+//              set_remote_cmdline_port(atoi(&argv[i][2]));
+//          }
+//          else
+//          {
+//              // Socket number is next argument
+//              if (i + 1 >= argc)
+//              {
+//                  printf("%s: -p port not specified\n", argv[0]);
+//                  return 1;
+//              }
+//              else
+//              {
+//                  set_remote_cmdline_port(atoi(argv[i+1]));
+//                  i++;
+//              }
+//          }
+//      }
+    }
 
-	return 0;
+    return 0;
 }
 
 /*
@@ -841,10 +687,10 @@ This routine sets unix signals and links them to a 'bail' routine.
 void setup_unix_signals(void)
 {
 #ifdef __unix__
-	signal(SIGTERM,handle_sig);
-	signal(SIGHUP,handle_sig);
-	signal(SIGQUIT,handle_sig);
-	signal(SIGINT,handle_sig);
+    signal(SIGTERM,handle_sig);
+    signal(SIGHUP,handle_sig);
+    signal(SIGQUIT,handle_sig);
+    signal(SIGINT,handle_sig);
 #endif
 }
 
@@ -907,145 +753,143 @@ static uchar backing_lcd_pixels[LCD_WIDTH*LCD_HEIGHT*LCD_RENDER_BPP];
 
 static inline drawpixel(int x, int y, int color)
 {
-	backing_lcd_pixels[(x + y*LCD_WIDTH)*LCD_RENDER_BPP + 0] = ((color ? COLOR_PIXEL : COLOR_BG)>>16) & 0xff;
-	backing_lcd_pixels[(x + y*LCD_WIDTH)*LCD_RENDER_BPP + 1] = ((color ? COLOR_PIXEL : COLOR_BG)>>8)  & 0xff;
-	backing_lcd_pixels[(x + y*LCD_WIDTH)*LCD_RENDER_BPP + 2] = ((color ? COLOR_PIXEL : COLOR_BG)>>0)  & 0xff;
+    backing_lcd_pixels[(x + y*LCD_WIDTH)*LCD_RENDER_BPP + 0] = ((color ? COLOR_PIXEL : COLOR_BG)>>16) & 0xff;
+    backing_lcd_pixels[(x + y*LCD_WIDTH)*LCD_RENDER_BPP + 1] = ((color ? COLOR_PIXEL : COLOR_BG)>>8)  & 0xff;
+    backing_lcd_pixels[(x + y*LCD_WIDTH)*LCD_RENDER_BPP + 2] = ((color ? COLOR_PIXEL : COLOR_BG)>>0)  & 0xff;
 }
 
 static inline refresh_texture(void)
 {
-	SDL_UpdateTexture(lcd_texture, NULL, backing_lcd_pixels, LCD_WIDTH * LCD_RENDER_BPP);
+    SDL_UpdateTexture(lcd_texture, NULL, backing_lcd_pixels, LCD_WIDTH * LCD_RENDER_BPP);
 }
 
 
 /*
 =================================================================
-draw:	This routine draws the entire LCD.  This is a member
-		function of Fl_Window.
+draw:   This routine draws the entire LCD.  This is a member
+        function of Fl_Window.
 =================================================================
 */
 void draw_entire_lcd_to_texture(void)
 {
-	int x=0;
-	int y=0;
-	int driver, col, row;
-	uchar value;
+    int x=0;
+    int y=0;
+    int driver, col, row;
+    uchar value;
 
-	for (driver = 0; driver < 10; driver++)
-	{
-		for (row = 0; row < 4; row++)
-		{
-			for (col = 0; col < 50; col++)
-			{
-				if (((driver == 4) || (driver == 9)) && ((col & 0x3F)  >= 40))
-					continue;
+    for (driver = 0; driver < 10; driver++)
+    {
+        for (row = 0; row < 4; row++)
+        {
+            for (col = 0; col < 50; col++)
+            {
+                if (((driver == 4) || (driver == 9)) && ((col & 0x3F)  >= 40))
+                    continue;
 
-				x=(driver % 5) * 50;
-				x+=col;
+                x=(driver % 5) * 50;
+                x+=col;
 
-				y = ((row - backing_lcd_top_row[driver]+4) % 4) << 3;
-				if (driver > 4)
-					y += 32;
+                y = ((row - backing_lcd_top_row[driver]+4) % 4) << 3;
+                if (driver > 4)
+                    y += 32;
 
-				if (x > 240)
-					x = x + 1;
-				value = backing_lcd[driver][row*64+col];
+                if (x > 240)
+                    x = x + 1;
+                value = backing_lcd[driver][row*64+col];
 
-				// Draw the black pixels
-				drawpixel(x,y++, value&0x01);
-				drawpixel(x,y++, value&0x02);
-				drawpixel(x,y++, value&0x04);
-				drawpixel(x,y++, value&0x08);
-				drawpixel(x,y++, value&0x10);
-				drawpixel(x,y++, value&0x20);
-				drawpixel(x,y++, value&0x40);
-				drawpixel(x,y++, value&0x80);
-			}
-		}
-	}
-	refresh_texture();
+                // Draw the black pixels
+                drawpixel(x,y++, value&0x01);
+                drawpixel(x,y++, value&0x02);
+                drawpixel(x,y++, value&0x04);
+                drawpixel(x,y++, value&0x08);
+                drawpixel(x,y++, value&0x10);
+                drawpixel(x,y++, value&0x20);
+                drawpixel(x,y++, value&0x40);
+                drawpixel(x,y++, value&0x80);
+            }
+        }
+    }
+    refresh_texture();
 }
 
 
 void run_co_file(void)
 {
-	if (!gCoFileContents) return;
+    if (!gCoFileContents) return;
 
-	ushort *at16 = gCoFileContents;
+    ushort *at16 = gCoFileContents;
 
-	if (gCoFileLength <= 6) return;
+    if (gCoFileLength <= 6) return;
 
-	ushort load_addr = *at16++;
-	ushort program_length = *at16++;
-	ushort entry_addr = *at16++;
+    ushort load_addr = *at16++;
+    ushort program_length = *at16++;
+    ushort entry_addr = *at16++;
 
-	unsigned char *at8 = (unsigned char *)(void *)at16;
+    unsigned char *at8 = (unsigned char *)(void *)at16;
 
-	if (gCoFileLength < 6 + program_length) return;
+    if (gCoFileLength < 6 + program_length) return;
 
-	for (ushort addr = load_addr; addr < load_addr+program_length; ++addr)
-	{
-		set_memory8(addr, *at8++);
-	}
+    for (ushort addr = load_addr; addr < load_addr+program_length; ++addr)
+    {
+        set_memory8(addr, *at8++);
+    }
 
-	gIntSP = SP;
-	DECSP2;
-	if (gReMem)
-	{
-		MEMSET(SP, PCL);
-		MEMSET(SP+1, PCH);
-	}
-	else
-	{
-		gBaseMemory[SP] = PCL;
-		gBaseMemory[SP+1] = PCH;
-	}
-	/* MEM16(SP)=PC; */
-	PCL = 0xff & entry_addr;
-	PCH = 0xff & (entry_addr >> 8);
+    gIntSP = SP;
+    DECSP2;
+    if (gReMem)
+    {
+        MEMSET(SP, PCL);
+        MEMSET(SP+1, PCH);
+    }
+    else
+    {
+        gBaseMemory[SP] = PCL;
+        gBaseMemory[SP+1] = PCH;
+    }
+    /* MEM16(SP)=PC; */
+    PCL = 0xff & entry_addr;
+    PCH = 0xff & (entry_addr >> 8);
 }
 
-int		sound_enable;				// Set TRUE when sound is enabled
+int     sound_enable;               // Set TRUE when sound is enabled
 
 /* This function runs once at startup. */
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
-	if (process_args(argc, argv))	/* Parse command line args */
-	{
-		SDL_Log("Couldn't parse command line args.");
-		return SDL_APP_FAILURE;
-	}
+    if (process_args(argc, argv))   /* Parse command line args */
+    {
+        SDL_Log("Couldn't parse command line args.");
+        return SDL_APP_FAILURE;
+    }
 
-	setup_working_path(argv);	/* Create a working dir path */
-	setup_unix_signals();		/* Setup Unix signal handling */
+    setup_working_path(argv);   /* Create a working dir path */
+    setup_unix_signals();       /* Setup Unix signal handling */
 
-	check_installation();		/* Test if install needs to be performed */
+    check_installation();       /* Test if install needs to be performed */
 
-	/* Perform initialization */
-	init_mem();					/* Initialize Memory */
-	init_io();					/* Initialize I/O structures */
-	sound_enable = 1;
-	init_sound();				/* Initialize Sound system */
-	init_display();				/* Initialize the Display */
-	init_cpu();					/* Initialize the CPU */
+    init_mem();                 /* Initialize Memory */
+    init_io();                  /* Initialize I/O structures */
+    sound_enable = 1;
+    init_sound();               /* Initialize Sound system */
+    init_cpu();                 /* Initialize the CPU */
 
-	SDL_SetAppMetadata("Example Renderer Clear", "1.0", "com.example.renderer-clear");
+    SDL_SetAppMetadata("Example Renderer Clear", "1.0", "com.example.renderer-clear");
 
-	if (!SDL_Init(SDL_INIT_VIDEO)) {
-		SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
-		return SDL_APP_FAILURE;
-	}
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+        SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
 
-	if (!SDL_CreateWindowAndRenderer("examples/renderer/clear", 240*10, 64*10, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
-		SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
-		return SDL_APP_FAILURE;
-	}
-	SDL_SetRenderLogicalPresentation(renderer, LCD_WIDTH, LCD_HEIGHT, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    if (!SDL_CreateWindowAndRenderer("Slappy", 240*6, 64*6, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+        SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+    SDL_SetRenderLogicalPresentation(renderer, LCD_WIDTH, LCD_HEIGHT, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
-	lcd_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, LCD_WIDTH, LCD_HEIGHT);
-	SDL_SetTextureScaleMode(lcd_texture, SDL_SCALEMODE_NEAREST);
+    lcd_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, LCD_WIDTH, LCD_HEIGHT);
+    SDL_SetTextureScaleMode(lcd_texture, SDL_SCALEMODE_NEAREST);
 
-	return SDL_APP_CONTINUE;  /* carry on with the program! */
+    return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
 
 static unsigned long map_special_key(SDL_Scancode scancode) {
@@ -1057,6 +901,7 @@ static unsigned long map_special_key(SDL_Scancode scancode) {
         case SDL_SCANCODE_KP_ENTER:  return MT_ENTER;
         case SDL_SCANCODE_PAUSE:     return MT_PAUSE;
         case SDL_SCANCODE_SPACE:     return MT_SPACE;
+        case SDL_SCANCODE_CAPSLOCK:  return MT_CAP_LOCK;
 
         // Directional
         case SDL_SCANCODE_LEFT:      return MT_LEFT;
@@ -1092,14 +937,14 @@ static unsigned long map_special_key(SDL_Scancode scancode) {
 /* This function runs when a new event (mouse input, keypresses, etc) occurs. */
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
-	if (event->type == SDL_EVENT_QUIT) {
-		gExitApp = 1;
-		return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
-	}
+    if (event->type == SDL_EVENT_QUIT) {
+        gExitApp = 1;
+        return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
+    }
 
-	// Handle Keyboard Events
+    // Handle Keyboard Events
     if (event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP)
-	{
+    {
 
         // Ignore OS-level key repeats (the emulator handles its own repetition)
         if (event->key.repeat) return SDL_APP_CONTINUE;
@@ -1114,9 +959,12 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         if (specialFlag != 0) {
             // Apply active-low logic for gSpecialKeys
             if (isDown) {
-                gSpecialKeys &= ~specialFlag;
+                if (specialFlag == MT_CAP_LOCK)
+                    gSpecialKeys ^= specialFlag;
+                else
+                    gSpecialKeys &= ~specialFlag;
 
-            } else {
+            } else if (specialFlag != MT_CAP_LOCK) {
                 gSpecialKeys |= specialFlag;
             }
         }
@@ -1135,95 +983,91 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         update_keys();
     }
 
-	return SDL_APP_CONTINUE;  /* carry on with the program! */
+    return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
 
 /* This function runs once per frame, and is the heart of the program. */
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-	static Uint64 time_last = 0;
-	Sint64 time_now = SDL_GetTicksNS();
-	Sint64 time_delta = time_now - time_last;
-	time_last = time_now;
+    static Uint64 time_last = 0;
+    Sint64 time_now = SDL_GetTicksNS();
+    Sint64 time_delta = time_now - time_last;
+    time_last = time_now;
 
-	if (time_delta > DELTA_TIME_MAX_NS)
-		time_delta = DELTA_TIME_MAX_NS;
+    if (time_delta > DELTA_TIME_MAX_NS)
+        time_delta = DELTA_TIME_MAX_NS;
 
-	Uint64 n_cycles = (Uint64)(time_delta * CYCLES_PER_NS);
-	emulate_n_cycles(n_cycles);
+    Uint64 n_cycles = (Uint64)(time_delta * CYCLES_PER_NS);
+    emulate_n_cycles(n_cycles);
 
-	SDL_RenderClear(renderer);
+    SDL_RenderClear(renderer);
     // scale to window automatically; use destination NULL to fill
     draw_entire_lcd_to_texture();
     SDL_RenderTexture(renderer, lcd_texture, NULL, NULL);
     SDL_RenderPresent(renderer);
 
-	static int delay_frames_before_co_run = 10;
+    static int delay_frames_before_co_run = 10;
     if (delay_frames_before_co_run > 0) {
-    	--delay_frames_before_co_run;
-    	if (delay_frames_before_co_run == 0) 	run_co_file();
+        --delay_frames_before_co_run;
+        if (delay_frames_before_co_run == 0)    run_co_file();
 
     }
 
-	return SDL_APP_CONTINUE;  /* carry on with the program! */
+    return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
 
 /* This function runs once at shutdown. */
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
-	/* SDL will clean up the window/renderer for us. */
+    /* SDL will clean up the window/renderer for us. */
 
-	/* Save RAM contents after emulation */
-	save_ram();
+    /* Save RAM contents after emulation */
+    save_ram();
 
-	/* Cleanup */
-	deinit_io();				/* Deinitialize I/O */
-	deinit_sound();				/* Deinitialize sound */
-	free_mem();					/* Free memory used by ReMem and/or Rampac */
+    /* Cleanup */
+    deinit_io();                /* Deinitialize I/O */
+    deinit_sound();             /* Deinitialize sound */
+    free_mem();                 /* Free memory used by ReMem and/or Rampac */
 }
-
-void init_display(void) {}
-void deinit_display(void) {}
-
 
 void drawbyte(int driver, int col, int value)
 {
-	int x;
-	int y;
+    int x;
+    int y;
 
-//	if (driver < 10)
-//	{
-		// Check if LCD already has the value being requested
-		if (backing_lcd[driver][col] == value)
-			return;
+//  if (driver < 10)
+//  {
+        // Check if LCD already has the value being requested
+        if (backing_lcd[driver][col] == value)
+            return;
 
-		//if (driver == 4)
-			//printf("%d=%d ", col, value);
+        //if (driver == 4)
+            //printf("%d=%d ", col, value);
 
-		// Load new value into lcd "RAM"
-		backing_lcd[driver][col] = value;
+        // Load new value into lcd "RAM"
+        backing_lcd[driver][col] = value;
 
-		// Check if value is an LCD command
-		if ((col&0x3f) > 49)
-			return;
+        // Check if value is an LCD command
+        if ((col&0x3f) > 49)
+            return;
 
-		// Calculate X position of byte
-		x=(driver % 5) * 50 + (col&0x3F);
+        // Calculate X position of byte
+        x=(driver % 5) * 50 + (col&0x3F);
 
-		// Calcluate y position of byte
-		y = ((((col & 0xC0) >> 6) - backing_lcd_top_row[driver] + 4) % 4) * 8;
-		if (driver > 4)
-			y += 32;
+        // Calcluate y position of byte
+        y = ((((col & 0xC0) >> 6) - backing_lcd_top_row[driver] + 4) % 4) * 8;
+        if (driver > 4)
+            y += 32;
 
-		// Draw each pixel of byte
-		drawpixel(x,y++,value&0x01);
-		drawpixel(x,y++,(value&0x02)>>1);
-		drawpixel(x,y++,(value&0x04)>>2);
-		drawpixel(x,y++,(value&0x08)>>3);
-		drawpixel(x,y++,(value&0x10)>>4);
-		drawpixel(x,y++,(value&0x20)>>5);
-		drawpixel(x,y++,(value&0x40)>>6);
-		drawpixel(x,y++,(value&0x80)>>7);
+        // Draw each pixel of byte
+        drawpixel(x,y++,value&0x01);
+        drawpixel(x,y++,(value&0x02)>>1);
+        drawpixel(x,y++,(value&0x04)>>2);
+        drawpixel(x,y++,(value&0x08)>>3);
+        drawpixel(x,y++,(value&0x10)>>4);
+        drawpixel(x,y++,(value&0x20)>>5);
+        drawpixel(x,y++,(value&0x40)>>6);
+        drawpixel(x,y++,(value&0x80)>>7);
 }
 
 void lcdcommand(int driver, int value) // ref: io.obj in function out
@@ -1246,7 +1090,7 @@ void tdock_write() { } // ref: io.obj in function out
 void handle_wheel_keys() { } // ref: io.obj in function update_keys
 
 peripheral_setup_t setup;
-memory_setup_t		mem_setup;	// Memory setup options
+memory_setup_t      mem_setup;  // Memory setup options
 
 void clock_serial_out() { } // ref: io.obj in function inport
 void enable_tpdd_log_menu(int bEnabled) { } // ref: serial.obj in function ser_init
@@ -1262,3 +1106,15 @@ void tpdd_ser_get_signals() { } // ref: serial.obj in function ser_get_signals
 void tpdd_ser_read_byte() { } // ref: serial.obj in function ser_read_byte
 void tpdd_ser_write_byte() { } // ref: serial.obj in function ser_write_byte
 void tpdd_ser_poll() { } // ref: serial.obj in function ser_poll
+
+void ser_init(void) {}
+void ser_deinit(void) {}
+void ser_set_baud(void) {}
+void ser_set_parity(void) {}
+void ser_set_bit_size(void) {}
+void ser_set_stop_bits(void) {}
+void ser_set_callback(void) {}
+uchar ser_get_flags(void) { return 0; }
+void ser_set_signals(void) {}
+uchar ser_read_byte(void) { return 0; }
+void ser_write_byte(uchar val) {(void)val;}

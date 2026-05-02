@@ -23,7 +23,6 @@ memory.c
 #include "io.h"
 #include "intelhex.h"
 #include "setup.h"
-#include "filewrap.h"
 
 uchar			*gMemory[64];		/* CPU Memory space */
 int				gRamBottom = 0x8000;/* Defines the amount of RAM installed */
