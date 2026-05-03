@@ -155,29 +155,11 @@ get_model_string:   This function returns the sring name of the specified
 */
 void get_model_string(char* str, int model)
 {
+    #define MODEL_COPY_NAME_CASE(EnumName, NameStr) case EnumName: strcpy(str, NameStr); break;
+
     switch (model)
     {
-    case MODEL_M100:
-        strcpy(str, "m100");
-        break;
-    case MODEL_M102:
-        strcpy(str, "m102");
-        break;
-    case MODEL_T200:
-        strcpy(str, "t200");
-        break;
-    case MODEL_M10:
-        strcpy(str, "m10");
-        break;
-    case MODEL_PC8201:
-        strcpy(str, "pc8201");
-        break;
-    case MODEL_KC85:
-        strcpy(str, "kc85");
-        break;
-    case MODEL_PC8300:
-        strcpy(str, "pc8300");
-        break;
+        MODEL_LIST(MODEL_COPY_NAME_CASE)
     }
 }
 
@@ -189,21 +171,9 @@ get_model_from_string:  This function returns the model number given the
 */
 int get_model_from_string(char* str)
 {
-    if (strcmp("m100", str) == 0)
-        return MODEL_M100;
-    else if (strcmp("m102", str) == 0)
-        return MODEL_M102;
-    else if (strcmp("t200", str) == 0)
-        return MODEL_T200;
-    else if (strcmp("pc8201", str) == 0)
-        return MODEL_PC8201;
-    else if (strcmp("pc8300", str) == 0)
-        return MODEL_PC8300;
-    else if (strcmp("m10", str) == 0)
-       return MODEL_M10;
-    else if (strcmp("kc85", str) == 0)
-        return MODEL_KC85;
 
+    #define MODEL_ENUMNAME_FROM_STR_CASE(EnumName, NameStr) if (!strcmp(NameStr, str)) return EnumName;
+    MODEL_LIST(MODEL_ENUMNAME_FROM_STR_CASE)
     return -1;
 }
 

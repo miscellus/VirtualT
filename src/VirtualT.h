@@ -33,15 +33,19 @@
 
 #define VERSION	"1.7"
 
-enum {
-	 MODEL_M100
-	,MODEL_M102
-	,MODEL_T200
-	,MODEL_PC8201
-	,MODEL_M10
-	,MODEL_KC85
-	,MODEL_PC8300
-};
+#define MODEL_LIST(X) \
+	X(MODEL_M100   , "m100") \
+	X(MODEL_M102   , "m102") \
+	X(MODEL_T200   , "t200") \
+	X(MODEL_PC8201 , "pc8201") \
+	X(MODEL_M10    , "m10") \
+	X(MODEL_KC85   , "kc85") \
+	X(MODEL_PC8300 , "pc8300") \
+	/**/
+
+#define MODEL_ENUM_NAME(EnumName, NameStr) EnumName,
+
+enum { MODEL_LIST(MODEL_ENUM_NAME) };
 
 #ifndef TRUE
 #define TRUE 1
