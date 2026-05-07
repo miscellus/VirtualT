@@ -832,10 +832,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
-    setup_working_path(argv);   /* Create a working dir path */
-    setup_unix_signals();       /* Setup Unix signal handling */
+    // setup_working_path(argv);   /* Create a working dir path */
+    // setup_unix_signals();       /* Setup Unix signal handling */
 
-    check_installation();       /* Test if install needs to be performed */
+    // check_installation();       /* Test if install needs to be performed */
 
     init_mem();                 /* Initialize Memory */
     init_io();                  /* Initialize I/O structures */

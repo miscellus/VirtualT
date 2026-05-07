@@ -10,6 +10,7 @@ memory.c
 ============================================================================
 */
 
+#include <assert.h>
 #include <string.h>
 #include <stdio.h>
 #include <string.h>
@@ -1715,6 +1716,8 @@ void patch_vt_version(char* pMem, int size)
 	}
 }
 
+#include "pc8201_rom_bytes.h"
+
 /*
 =============================================================================
 load_opt_rom:  This function loads option ROMS as specified by user settings.
@@ -1741,8 +1744,9 @@ void load_sys_rom(void)
 		gStdRomDesc = &gM100_Desc;
 
 	/* Get Path to ROM based on current Model selection */
-	get_rom_path(file, gModel);
+	//get_rom_path(file, gModel);
 
+#if 0
 	/* Open the ROM file */
 	fd = fopen(file, "rb");
 	//fd = open(file,O_RDONLY | O_BINARY);
@@ -1770,6 +1774,13 @@ void load_sys_rom(void)
 	
 	/* Close the ROM file */
 	fclose(fd);
+#else
+	gRomSize = gModel == MODEL_T200 ? 40960 : 32768;
+
+	assert(gRomSize == sizeof(pc8201_rom));
+	memcpy(gSysROM, pc8201_rom, gRomSize);
+
+#endif
 
 	/* Patch the ROM with VirtualT version if requested */
 	patch_vt_version((char *) gSysROM, ROMSIZE);
